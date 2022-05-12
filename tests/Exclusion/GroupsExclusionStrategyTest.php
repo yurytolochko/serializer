@@ -90,4 +90,38 @@ class GroupsExclusionStrategyTest extends TestCase
             [['foo', 'prop' => ['prop2' => ['prop3' => ['def']]]], ['prop', 'prop2'], ['Default', 'prop3' => ['def']]],
         ];
     }
+
+    /**
+     * @dataProvider getGroupsFor2
+     */
+    public function testGroupsFor2(array $groups, array $propsVisited, bool $exclude)
+    {
+
+        $exclusion = new GroupsExclusionStrategy($groups);
+        $context = SerializationContext::create();
+
+        $lastMetadata = null;
+        foreach ($propsVisited as $prop => $propGroups) {
+            $metadata = new StaticPropertyMetadata('stdClass', $prop, 'propVal');
+            $metadata->groups = $propGroups;
+            $context->pushPropertyMetadata($metadata);
+
+            $lastMetadata = $metadata;
+        }
+
+//        var_dump($exclusion->getGroupsFor($context));
+        self::assertEquals($exclusion->shouldSkipProperty($lastMetadata, $context), $exclude, join('.', array_keys($propsVisited)));
+    }
+
+    public function getGroupsFor2()
+    {
+        return [
+            [['user:details'], ['id' => ['user:list', 'user:details']], false],
+            [['user:details'], ['team' => ['user:details' => ['team:details']]], false],
+            [['user:details'], ['team' => ['user:details' => ['team:details']], 'id' => ['team:details']], false],
+            [['user:details'], ['team' => ['user:details' => ['team:details']], 'owner' => ['team:details' => ['user:list']]], false],
+            [['user:details'], ['team' => ['user:details' => ['team:details']], 'owner' => ['team:details' => ['user:list']], 'id' => ['user:list', 'user:details']], false],
+            [['user:details'], ['team' => ['user:details' => ['team:details']], 'owner' => ['team:details' => ['user:list']], 'team2' => ['user:details']], true],
+        ];
+    }
 }

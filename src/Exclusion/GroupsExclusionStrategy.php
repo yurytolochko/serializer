@@ -49,22 +49,79 @@ final class GroupsExclusionStrategy implements ExclusionStrategyInterface
         return false;
     }
 
+    public function getPropertyGroups(PropertyMetadata $property, Context $navigatorContext)
+    {
+        if (empty($property->groups)) {
+            $groups = [self::DEFAULT_GROUP];
+        } else {
+            $groups = [];
+            foreach ($property->groups as $key => $group) {
+                if (is_array($group)) {
+                    $groups[] = $key;
+                } else {
+                    $groups[] = $group;
+                }
+            }
+        }
+
+        /** @var PropertyMetadata $metadata */
+        foreach ($navigatorContext->getMetadataStack() as $metadata) {
+            if ($metadata === $property) {
+                continue;
+            }
+
+            if (!$metadata instanceof PropertyMetadata) {
+                continue;
+            }
+
+            if (empty($metadata->groups)) {
+                continue;
+            }
+
+            $newGroups = null;
+            foreach ($metadata->groups as $key => $value) {
+                if (!is_array($value)) {
+                    continue;
+                }
+
+                if (is_null($newGroups)) {
+                    $newGroups = [];
+                }
+
+                foreach ($value as $group) {
+                    if (in_array($group, $groups)) {
+                        $newGroups[$key] = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!is_null($newGroups)) {
+                $groups = array_keys($newGroups);
+            }
+        }
+
+        return $groups;
+    }
+
     public function shouldSkipProperty(PropertyMetadata $property, Context $navigatorContext): bool
     {
+        $propertyGroups = $this->getPropertyGroups($property, $navigatorContext);
+
         if ($this->nestedGroups) {
             $groups = $this->getGroupsFor($navigatorContext);
 
-            if (!$property->groups) {
-                return !in_array(self::DEFAULT_GROUP, $groups);
+            if (!$propertyGroups) {
+                return !in_array(self::DEFAULT_GROUP, $propertyGroups);
             }
 
-            return $this->shouldSkipUsingGroups($property, $groups);
+            return $this->shouldSkipUsingGroups($propertyGroups, $groups);
         } else {
-            if (!$property->groups) {
+            if (!$propertyGroups) {
                 return !isset($this->groups[self::DEFAULT_GROUP]);
             }
 
-            foreach ($property->groups as $group) {
+            foreach ($propertyGroups as $group) {
                 if (isset($this->groups[$group])) {
                     return false;
                 }
@@ -74,9 +131,9 @@ final class GroupsExclusionStrategy implements ExclusionStrategyInterface
         }
     }
 
-    private function shouldSkipUsingGroups(PropertyMetadata $property, array $groups): bool
+    private function shouldSkipUsingGroups(array $propertyGroups, array $groups): bool
     {
-        foreach ($property->groups as $group) {
+        foreach ($propertyGroups as $group) {
             if (in_array($group, $groups)) {
                 return false;
             }
